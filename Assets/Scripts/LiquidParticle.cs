@@ -100,13 +100,13 @@ public class LiquidParticlesDebugLinksSystem : SystemBase
 
 public class LiquidParticlesPrepareRaycastBatchSystem : SystemBase
 {
-    //EndSimulationEntityCommandBufferSystem commandBufferSystem;
+    EndSimulationEntityCommandBufferSystem commandBufferSystem;
 
     EntityQuery query;
 
     protected override void OnCreate()
     {
-        //commandBufferSystem = World.GetOrCreateSystem<EndSimulationEntityCommandBufferSystem>();
+        commandBufferSystem = World.GetOrCreateSystem<EndSimulationEntityCommandBufferSystem>();
 
         query = GetEntityQuery(
             ComponentType.ReadOnly<LiquidParticle>());
@@ -114,12 +114,14 @@ public class LiquidParticlesPrepareRaycastBatchSystem : SystemBase
 
     protected override void OnUpdate()
     {
-        //var ecb = commandBufferSystem.CreateCommandBuffer().AsParallelWriter();
 
         int ct = query.CalculateEntityCount();
 
+        var entityList = new NativeList<Entity>(ct, Allocator.TempJob);
         var commandsList = new NativeList<RaycastCommand>(ct, Allocator.TempJob);
         float dt = Time.DeltaTime;
+
+        // Prepare PASS
 
         Dependency = Entities
             .WithName("Prepare_RaycastCommands")
@@ -133,15 +135,43 @@ public class LiquidParticlesPrepareRaycastBatchSystem : SystemBase
                     maxHits = 1,
                     layerMask = -1
                 });
+
+                entityList.AddNoResize(entity);
             }).Schedule(Dependency);
+
+        // Raycast PASS
+        var array = commandsList.AsDeferredJobArray();
 
         var hitResults = new NativeArray<RaycastHit>(ct, Allocator.TempJob);
         Dependency = RaycastCommand.ScheduleBatch(
-            commandsList.AsDeferredJobArray(), hitResults, 32, Dependency);
+            array, hitResults, 32, Dependency);
 
-        Dependency.Complete();
-        commandsList.Dispose();
-        hitResults.Dispose();
+        // Kill PASS
+
+        var ecb = commandBufferSystem.CreateCommandBuffer().AsParallelWriter();
+
+        Dependency = Job
+            //.WithReadOnly(array)
+            .WithReadOnly(commandsList)
+            .WithReadOnly(hitResults)
+            .WithCode(() =>
+            {
+                var _ = commandsList.Length; // Required for capture
+
+                for (int i = 0; i < ct; i++)
+                {
+                    if (hitResults[i].distance == 0)
+                        ecb.DestroyEntity(i, entityList[i]);
+                }
+            })
+            .WithDisposeOnCompletion(entityList)
+            .WithDisposeOnCompletion(commandsList)
+            //.WithDisposeOnCompletion(array)
+            .WithDisposeOnCompletion(hitResults)
+            .WithBurst()
+            .Schedule(Dependency);
+
+        commandBufferSystem.AddJobHandleForProducer(Dependency);
     }
 }
 
@@ -173,5 +203,7 @@ public class LiquidParticleRaycastIntoWorldSystem : SystemBase
                 Debug.DrawRay(particle.position, hit.normal, Color.red);
             }
         }).WithoutBurst().Run();
+
+        commandBufferSystem.AddJobHandleForProducer(Dependency);
     }
 }
