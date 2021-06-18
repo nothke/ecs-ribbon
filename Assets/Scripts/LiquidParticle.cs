@@ -98,6 +98,54 @@ public class LiquidParticlesDebugLinksSystem : SystemBase
     }
 }
 
+public class LiquidParticlesPrepareRaycastBatchSystem : SystemBase
+{
+    //EndSimulationEntityCommandBufferSystem commandBufferSystem;
+
+    EntityQuery query;
+
+    protected override void OnCreate()
+    {
+        //commandBufferSystem = World.GetOrCreateSystem<EndSimulationEntityCommandBufferSystem>();
+
+        query = GetEntityQuery(
+            ComponentType.ReadOnly<LiquidParticle>());
+    }
+
+    protected override void OnUpdate()
+    {
+        //var ecb = commandBufferSystem.CreateCommandBuffer().AsParallelWriter();
+
+        int ct = query.CalculateEntityCount();
+
+        var commandsList = new NativeList<RaycastCommand>(ct, Allocator.TempJob);
+        float dt = Time.DeltaTime;
+
+        Dependency = Entities
+            .WithName("Prepare_RaycastCommands")
+            .ForEach((Entity entity, int entityInQueryIndex, ref LiquidParticle particle) =>
+            {
+                commandsList.AddNoResize(new RaycastCommand()
+                {
+                    from = particle.position,
+                    direction = particle.velocity,
+                    distance = length(particle.velocity) * dt,
+                    maxHits = 1,
+                    layerMask = -1
+                });
+            }).Schedule(Dependency);
+
+        var hitResults = new NativeArray<RaycastHit>(ct, Allocator.TempJob);
+        Dependency = RaycastCommand.ScheduleBatch(
+            commandsList.AsDeferredJobArray(), hitResults, 32, Dependency);
+
+        Dependency.Complete();
+        commandsList.Dispose();
+        hitResults.Dispose();
+    }
+}
+
+[DisableAutoCreation]
 public class LiquidParticleRaycastIntoWorldSystem : SystemBase
 {
     EndSimulationEntityCommandBufferSystem commandBufferSystem;
@@ -117,6 +165,7 @@ public class LiquidParticleRaycastIntoWorldSystem : SystemBase
         Entities.ForEach((Entity entity, ref LiquidParticle particle) =>
         {
             RaycastHit hit;
+
             if (Physics.Raycast(particle.position, particle.velocity, out hit,
                 length(particle.velocity) * dt))
             {
