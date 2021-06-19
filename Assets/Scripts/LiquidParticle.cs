@@ -10,11 +10,14 @@ using Unity.Burst;
 using Unity.Entities;
 using UnityEngine.Profiling;
 
-public struct LiquidParticle : IComponentData
+public struct ParticleMotion : IComponentData
 {
     public float3 position;
     public float3 velocity;
+}
 
+public struct LiquidParticle : IComponentData
+{
     public float amount;
     public float heat;
 
@@ -29,7 +32,7 @@ public class LiquidParticlesAdvanceSystem : SystemBase
         float dt = Time.DeltaTime;
         float3 gravity = Physics.gravity;
 
-        Entities.ForEach((ref LiquidParticle particle) =>
+        Entities.ForEach((ref ParticleMotion particle) =>
         {
             particle.velocity += gravity * dt;
             particle.position += particle.velocity * dt;
@@ -44,7 +47,7 @@ public class LiquidParticlesDebugPositionSystem : SystemBase
     {
         float3 r = right() * 0.02f;
         float3 u = up() * 0.02f;
-        Entities.ForEach((ref LiquidParticle particle) =>
+        Entities.ForEach((ref ParticleMotion particle) =>
         {
             Debug.DrawRay(particle.position - r, r * 2);
             Debug.DrawRay(particle.position - u, u * 2);
@@ -66,7 +69,7 @@ public class LiquidParticleDestroyBelowZeroSystem : SystemBase
     {
         var ecb = commandBufferSystem.CreateCommandBuffer().AsParallelWriter();
 
-        Entities.ForEach((Entity entity, int entityInQueryIndex, ref LiquidParticle particle) =>
+        Entities.ForEach((Entity entity, int entityInQueryIndex, ref ParticleMotion particle) =>
         {
             if (particle.position.y < 0)
                 ecb.DestroyEntity(entityInQueryIndex, entity);
@@ -81,20 +84,20 @@ public class LiquidParticlesDebugLinksSystem : SystemBase
 {
     protected override void OnUpdate()
     {
-        var cdfe = GetComponentDataFromEntity<LiquidParticle>(isReadOnly: true);
+        var cdfe = GetComponentDataFromEntity<ParticleMotion>(isReadOnly: true);
 
         Entities
             .WithNativeDisableContainerSafetyRestriction(cdfe)
             .WithReadOnly(cdfe)
-            .ForEach((ref LiquidParticle particle) =>
+            .ForEach((ref ParticleMotion particle, ref LiquidParticle liquid) =>
         {
-            if (particle.prev == Entity.Null)
+            if (liquid.prev == Entity.Null)
                 return;
 
-            if (!cdfe.HasComponent(particle.prev))
+            if (!cdfe.HasComponent(liquid.prev))
                 return;
 
-            LiquidParticle prev = cdfe[particle.prev];
+            ParticleMotion prev = cdfe[liquid.prev];
             Debug.DrawLine(prev.position, particle.position);
 
         }).Schedule();
@@ -112,7 +115,7 @@ public class LiquidParticlesRaycastBatchSystem : SystemBase
         commandBufferSystem = World.GetOrCreateSystem<EndSimulationEntityCommandBufferSystem>();
 
         query = GetEntityQuery(
-            ComponentType.ReadOnly<LiquidParticle>());
+            ComponentType.ReadOnly<ParticleMotion>());
     }
 
     protected override void OnUpdate()
@@ -127,7 +130,7 @@ public class LiquidParticlesRaycastBatchSystem : SystemBase
 
         Dependency = Entities
             .WithName("Prepare_Pass")
-            .ForEach((Entity entity, int entityInQueryIndex, ref LiquidParticle particle) =>
+            .ForEach((Entity entity, int entityInQueryIndex, ref ParticleMotion particle) =>
             {
                 commands[entityInQueryIndex] = new RaycastCommand(
                     particle.position, particle.velocity,
@@ -185,7 +188,7 @@ public class LiquidParticlesRaycastSystem : SystemBase
 
         // TODO: Fill up a raycast command query instead
 
-        Entities.ForEach((Entity entity, ref LiquidParticle particle) =>
+        Entities.ForEach((Entity entity, ref ParticleMotion particle) =>
         {
             RaycastHit hit;
 
@@ -214,7 +217,9 @@ public class LiquidParticleLineRenderingSystem : SystemBase
 
     protected override void OnCreate()
     {
-        query = GetEntityQuery(typeof(LiquidParticle));
+        query = GetEntityQuery(
+            typeof(LiquidParticle),
+            typeof(ParticleMotion));
 
         points = new NativeArray<Vector3>(MAX_POINTS_IN_BUFFER, Allocator.Persistent);
         lines = Object.FindObjectOfType<LiquidParticleLinerManager>();
@@ -241,7 +246,8 @@ public class LiquidParticleLineRenderingSystem : SystemBase
     protected override void OnUpdate()
     {
         var entities = query.ToEntityArray(Allocator.TempJob);
-        var components = query.ToComponentDataArray<LiquidParticle>(Allocator.TempJob);
+        var particles = query.ToComponentDataArray<ParticleMotion>(Allocator.TempJob);
+        var liquids = query.ToComponentDataArray<LiquidParticle>(Allocator.TempJob);
 
         var sortables = new NativeArray<Sortable>(entities.Length, Allocator.TempJob);
 
@@ -249,18 +255,19 @@ public class LiquidParticleLineRenderingSystem : SystemBase
 
         Job
             .WithName("Sort")
-            .WithReadOnly(components)
             .WithReadOnly(entities)
+            .WithReadOnly(particles)
+            .WithReadOnly(liquids)
             .WithCode(() =>
         {
             for (int i = 0; i < sortables.Length; i++)
             {
                 sortables[i] = new Sortable()
                 {
-                    position = components[i].position,
+                    position = particles[i].position,
                     entity = entities[i],
-                    prev = components[i].prev,
-                    index = components[i].sortIndex
+                    prev = liquids[i].prev,
+                    index = liquids[i].sortIndex
                 };
             }
 
@@ -325,7 +332,8 @@ public class LiquidParticleLineRenderingSystem : SystemBase
 
 
         entities.Dispose();
-        components.Dispose();
+        particles.Dispose();
+        liquids.Dispose();
         sortables.Dispose();
         ranges.Dispose();
     }

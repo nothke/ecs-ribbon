@@ -16,7 +16,9 @@ public class LiquidParticleSpawner : MonoBehaviour
     private void Start()
     {
         manager = World.DefaultGameObjectInjectionWorld.EntityManager;
-        arch = manager.CreateArchetype(typeof(LiquidParticle));
+        arch = manager.CreateArchetype(
+            typeof(ParticleMotion),
+            typeof(LiquidParticle));
     }
 
     Entity prev;
@@ -29,11 +31,14 @@ public class LiquidParticleSpawner : MonoBehaviour
             new Vector3(Input.GetAxis("Horizontal"), 0, Input.GetAxis("Vertical"));
 
         var e = manager.CreateEntity(arch);
-        manager.SetComponentData(e, new LiquidParticle()
+        manager.SetComponentData(e, new ParticleMotion()
         {
             position = transform.position,
             velocity = transform.forward * speed,
+        });
 
+        manager.SetComponentData(e, new LiquidParticle()
+        {
             amount = 1,
             heat = 0,
             prev = prev,
