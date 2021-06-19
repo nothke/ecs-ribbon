@@ -118,46 +118,47 @@ public class LiquidParticlesRaycastBatchSystem : SystemBase
     {
         int ct = query.CalculateEntityCount();
 
-        var entityList = new NativeArray<Entity>(ct, Allocator.TempJob);
-        var commandsList = new NativeArray<RaycastCommand>(ct, Allocator.TempJob);
+        var entities = new NativeArray<Entity>(ct, Allocator.TempJob);
+        var commands = new NativeArray<RaycastCommand>(ct, Allocator.TempJob);
         float dt = Time.DeltaTime;
 
         // Prepare PASS
 
         Dependency = Entities
-            .WithName("Prepare_RaycastCommands")
+            .WithName("Prepare_Pass")
             .ForEach((Entity entity, int entityInQueryIndex, ref LiquidParticle particle) =>
             {
-                commandsList[entityInQueryIndex] = new RaycastCommand(
+                commands[entityInQueryIndex] = new RaycastCommand(
                     particle.position, particle.velocity,
                     length(particle.velocity) * dt);
 
-                entityList[entityInQueryIndex] = entity;
+                entities[entityInQueryIndex] = entity;
             }).Schedule(Dependency);
 
         // Raycast PASS
 
         var hitResults = new NativeArray<RaycastHit>(ct, Allocator.TempJob);
         Dependency = RaycastCommand.ScheduleBatch(
-            commandsList, hitResults, 32, Dependency);
+            commands, hitResults, 32, Dependency);
 
-        commandsList.Dispose(Dependency);
+        commands.Dispose(Dependency);
 
         // Kill PASS
 
         var ecb = commandBufferSystem.CreateCommandBuffer().AsParallelWriter();
 
         Dependency = Job
+            .WithName("Kill_Pass")
             .WithReadOnly(hitResults)
             .WithCode(() =>
             {
                 for (int i = 0; i < ct; i++)
                 {
                     if (RaycastUtil.GetColliderID(hitResults[i]) != 0)
-                        ecb.DestroyEntity(i, entityList[i]);
+                        ecb.DestroyEntity(i, entities[i]);
                 }
             })
-            .WithDisposeOnCompletion(entityList)
+            .WithDisposeOnCompletion(entities)
             .WithDisposeOnCompletion(hitResults)
             .WithBurst()
             .Schedule(Dependency);
@@ -239,19 +240,26 @@ public class LiquidParticleLineRenderingSystem : SystemBase
 
         var sortables = new NativeArray<Sortable>(entities.Length, Allocator.TempJob);
 
-
-        for (int i = 0; i < sortables.Length; i++)
+        Job
+            .WithReadOnly(components)
+            .WithReadOnly(entities)
+            .WithCode(() =>
         {
-            sortables[i] = new Sortable()
+            for (int i = 0; i < sortables.Length; i++)
             {
-                position = components[i].position,
-                entity = entities[i],
-                prev = components[i].prev,
-                index = components[i].sortIndex
-            };
-        }
+                sortables[i] = new Sortable()
+                {
+                    position = components[i].position,
+                    entity = entities[i],
+                    prev = components[i].prev,
+                    index = components[i].sortIndex
+                };
+            }
 
-        sortables.Sort();
+            sortables.Sort();
+        }).Schedule();
+
+        Dependency.Complete();
 
         lines.Clear();
 

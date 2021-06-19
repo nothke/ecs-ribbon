@@ -25,6 +25,8 @@ public class LiquidParticleSpawner : MonoBehaviour
 
     private void Update()
     {
+        transform.position +=
+            new Vector3(Input.GetAxis("Horizontal"), 0, Input.GetAxis("Vertical"));
 
         var e = manager.CreateEntity(arch);
         manager.SetComponentData(e, new LiquidParticle()
