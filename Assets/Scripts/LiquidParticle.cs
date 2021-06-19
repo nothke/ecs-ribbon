@@ -117,8 +117,8 @@ public class LiquidParticlesPrepareRaycastBatchSystem : SystemBase
 
         int ct = query.CalculateEntityCount();
 
-        var entityList = new NativeList<Entity>(ct, Allocator.TempJob);
-        var commandsList = new NativeList<RaycastCommand>(ct, Allocator.TempJob);
+        var entityList = new NativeArray<Entity>(ct, Allocator.TempJob);
+        var commandsList = new NativeArray<RaycastCommand>(ct, Allocator.TempJob);
         float dt = Time.DeltaTime;
 
         // Prepare PASS
@@ -127,24 +127,27 @@ public class LiquidParticlesPrepareRaycastBatchSystem : SystemBase
             .WithName("Prepare_RaycastCommands")
             .ForEach((Entity entity, int entityInQueryIndex, ref LiquidParticle particle) =>
             {
-                commandsList.AddNoResize(new RaycastCommand()
-                {
-                    from = particle.position,
-                    direction = particle.velocity,
-                    distance = length(particle.velocity) * dt,
-                    maxHits = 1,
-                    layerMask = -1
-                });
+                commandsList[entityInQueryIndex] = new RaycastCommand(
+                    particle.position, particle.velocity,
+                    length(particle.velocity) * dt);
 
-                entityList.AddNoResize(entity);
+                entityList[entityInQueryIndex] = entity;
             }).Schedule(Dependency);
 
         // Raycast PASS
-        var array = commandsList.AsDeferredJobArray();
 
         var hitResults = new NativeArray<RaycastHit>(ct, Allocator.TempJob);
         Dependency = RaycastCommand.ScheduleBatch(
-            array, hitResults, 32, Dependency);
+            commandsList, hitResults, 32, Dependency);
+
+        Dependency.Complete();
+        for (int i = 0; i < hitResults.Length; i++)
+        {
+            //Debug.Log(array[i]);
+
+            if (hitResults[i].collider != null)
+                Debug.Log(hitResults[i].collider);
+        }
 
         // Kill PASS
 
@@ -160,7 +163,7 @@ public class LiquidParticlesPrepareRaycastBatchSystem : SystemBase
 
                 for (int i = 0; i < ct; i++)
                 {
-                    if (hitResults[i].distance == 0)
+                    if (RaycastUtil.GetColliderID(hitResults[i]) != 0)
                         ecb.DestroyEntity(i, entityList[i]);
                 }
             })
