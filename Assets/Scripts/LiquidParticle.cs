@@ -268,15 +268,22 @@ public class LiquidParticleLineRenderingSystem : SystemBase
 
             sortables.Sort();
         })
-            .Schedule();
+            .WithBurst()
+            .Run();
+        //.Schedule();
 
-        Dependency.Complete();
+        //Dependency.Complete();
 
         lines.Clear();
 
         Profiler.BeginSample("Find and form lines");
 
+        var _points = points;
 
+        Job
+            .WithName("Slice_Lines")
+            .WithReadOnly(sortables)
+            .WithCode(() =>
         {
             int cur = 0;
             int start = 0;
@@ -286,7 +293,7 @@ public class LiquidParticleLineRenderingSystem : SystemBase
                 if (sortables[i].prev == sortables[i - 1].entity
                     && cur < MAX_POINTS_IN_BUFFER)
                 {
-                    points[cur++] = sortables[i].position;
+                    _points[cur++] = sortables[i].position;
                 }
                 else
                 {
@@ -307,6 +314,7 @@ public class LiquidParticleLineRenderingSystem : SystemBase
                 ranges.Add(cur - start);
             }
         }
+        ).WithBurst().Run();
 
         Profiler.EndSample();
 
