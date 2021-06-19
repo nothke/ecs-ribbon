@@ -1,6 +1,8 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Unity.Collections;
+using UnityEngine.Profiling;
 
 public class LiquidParticleLinerManager : MonoBehaviour
 {
@@ -16,6 +18,8 @@ public class LiquidParticleLinerManager : MonoBehaviour
 
     public void Clear()
     {
+        Profiler.BeginSample("Clear");
+
         foreach (var l in inUse)
         {
             l.positionCount = 0;
@@ -23,13 +27,19 @@ public class LiquidParticleLinerManager : MonoBehaviour
         }
 
         inUse.Clear();
+
+        Profiler.EndSample();
     }
 
-    public LineRenderer Form(Vector3[] points, int count)
+    public LineRenderer Form(NativeArray<Vector3> points, int count)
+
     {
+        Profiler.BeginSample("Form");
         var line = Get();
         line.positionCount = count;
         line.SetPositions(points);
+
+        Profiler.EndSample();
         return line;
     }
 

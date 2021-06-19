@@ -8,6 +8,7 @@ using Unity.Mathematics;
 using static Unity.Mathematics.math;
 using Unity.Burst;
 using Unity.Entities;
+using UnityEngine.Profiling;
 
 public struct LiquidParticle : IComponentData
 {
@@ -209,13 +210,19 @@ public class LiquidParticleLineRenderingSystem : SystemBase
     LiquidParticleLinerManager lines;
 
     const int MAX_POINTS_IN_BUFFER = 256;
-    Vector3[] points = new Vector3[MAX_POINTS_IN_BUFFER];
+    NativeArray<Vector3> points;
 
     protected override void OnCreate()
     {
         query = GetEntityQuery(typeof(LiquidParticle));
 
+        points = new NativeArray<Vector3>(MAX_POINTS_IN_BUFFER, Allocator.Persistent);
         lines = Object.FindObjectOfType<LiquidParticleLinerManager>();
+    }
+
+    protected override void OnDestroy()
+    {
+        points.Dispose();
     }
 
     public struct Sortable : System.IComparable<Sortable>
@@ -240,7 +247,10 @@ public class LiquidParticleLineRenderingSystem : SystemBase
 
         var sortables = new NativeArray<Sortable>(entities.Length, Allocator.TempJob);
 
+        var ranges = new NativeList<int>(64, Allocator.TempJob);
+
         Job
+            .WithName("Sort")
             .WithReadOnly(components)
             .WithReadOnly(entities)
             .WithCode(() =>
@@ -257,34 +267,63 @@ public class LiquidParticleLineRenderingSystem : SystemBase
             }
 
             sortables.Sort();
-        }).Schedule();
+        })
+            .Schedule();
 
         Dependency.Complete();
 
         lines.Clear();
 
-        int vi = 0;
+        Profiler.BeginSample("Find and form lines");
 
-        for (int i = sortables.Length - 1; i >= 1; i--)
+
         {
-            if (sortables[i].prev == sortables[i - 1].entity)
+            int len = 0;
+            int start = 0;
+
+            for (int i = sortables.Length - 1; i >= 1; i--)
             {
-                points[vi++] = sortables[i].position;
-            }
-            else
-            {
-                lines.Form(points, vi);
-                vi = 0;
+                if (sortables[i].prev == sortables[i - 1].entity)
+                {
+                    points[len++] = sortables[i].position;
+                }
+                else
+                {
+                    //lines.Form(points, len);
+
+                    ranges.Add(start);
+                    ranges.Add(len);
+                    start += len;
+                    len = 0;
+                }
+
+                if (len >= MAX_POINTS_IN_BUFFER)
+                {
+                    //lines.Form(points, len);
+
+                    ranges.Add(start);
+                    ranges.Add(len);
+                    start += len;
+                    len = 0;
+                }
             }
 
-            if (vi >= MAX_POINTS_IN_BUFFER)
-            {
-                lines.Form(points, vi);
-                vi = 0;
-            }
+            ranges.Add(start);
+            ranges.Add(len);
+            //start += len;
+            //len = 0;
+            //lines.Form(points, len);
         }
 
-        lines.Form(points, vi);
+        for (int i = 0; i < ranges.Length; i += 2)
+        {
+            Debug.Log($"{ranges[i]}:{ranges[i + 1]}");
+
+            var slice = points.GetSubArray(ranges[i], ranges[i + 1]);
+            lines.Form(slice, ranges[i + 1]);
+        }
+
+        Profiler.EndSample();
 
         entities.Dispose();
         components.Dispose();
