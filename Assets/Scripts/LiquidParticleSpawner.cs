@@ -9,6 +9,8 @@ public class LiquidParticleSpawner : MonoBehaviour
     EntityManager manager;
     EntityArchetype arch;
 
+    public LineRenderer prefab;
+
     public float speed = 3;
 
     private void Start()
@@ -19,8 +21,11 @@ public class LiquidParticleSpawner : MonoBehaviour
 
     Entity prev;
 
+    int i = 0;
+
     private void Update()
     {
+
         var e = manager.CreateEntity(arch);
         manager.SetComponentData(e, new LiquidParticle()
         {
@@ -29,7 +34,9 @@ public class LiquidParticleSpawner : MonoBehaviour
 
             amount = 1,
             heat = 0,
-            prev = prev
+            prev = prev,
+
+            sortIndex = i++
         });
 
         prev = e;

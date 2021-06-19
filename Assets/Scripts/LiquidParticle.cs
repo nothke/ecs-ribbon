@@ -18,6 +18,7 @@ public struct LiquidParticle : IComponentData
     public float heat;
 
     public Entity prev;
+    public int sortIndex;
 }
 
 public class LiquidParticlesAdvanceSystem : SystemBase
@@ -194,5 +195,65 @@ public class LiquidParticlesRaycastSystem : SystemBase
         }).WithoutBurst().Run();
 
         commandBufferSystem.AddJobHandleForProducer(Dependency);
+    }
+}
+
+public class LiquidParticleLineRenderingSystem : SystemBase
+{ 
+    EntityQuery query;
+
+    public LineRenderer[] renderers;
+
+    protected override void OnCreate()
+    {
+        query = GetEntityQuery(typeof(LiquidParticle));
+    }
+
+    public struct Sortable : System.IComparable<Sortable>
+    {
+        public Entity entity;
+        public Entity prev;
+        public int index;
+
+        public int CompareTo(Sortable other)
+        {
+            return index.CompareTo(other.index);
+        }
+    }
+
+    protected override void OnUpdate()
+    {
+        //var cdfe = GetComponentDataFromEntity<LiquidParticle>(true);
+
+        var entities = query.ToEntityArray(Allocator.TempJob);
+        var components = query.ToComponentDataArray<LiquidParticle>(Allocator.TempJob);
+
+        var sortables = new NativeArray<Sortable>(entities.Length, Allocator.TempJob);
+
+        for (int i = 0; i < sortables.Length; i++)
+        {
+            sortables[i] = new Sortable()
+            {
+                entity = entities[i],
+                prev = components[i].prev,
+                index = components[i].sortIndex
+            };
+        }
+
+        sortables.Sort();
+
+        for (int i = sortables.Length - 1; i >= 1; i--)
+        {
+            if (sortables[i].prev == sortables[i - 1].entity)
+            {
+                Debug.Log("Connected");
+            }
+            else
+                Debug.Log("DIS");
+        }
+
+        entities.Dispose();
+        components.Dispose();
+        sortables.Dispose();
     }
 }
