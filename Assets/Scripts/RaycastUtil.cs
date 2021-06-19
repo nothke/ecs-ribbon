@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
 using Unity.Burst;
 
-public class RaycastUtil : MonoBehaviour
+public static class RaycastUtil
 {
     // From: http://blog.lidia-martinez.com/use-the-results-of-raycastcommand-schedule-on-a-job
     // by Lidia Martinez

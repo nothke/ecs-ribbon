@@ -75,6 +75,7 @@ public class LiquidParticleDestroyBelowZeroSystem : SystemBase
     }
 }
 
+[DisableAutoCreation]
 public class LiquidParticlesDebugLinksSystem : SystemBase
 {
     protected override void OnUpdate()
@@ -199,18 +200,23 @@ public class LiquidParticlesRaycastSystem : SystemBase
 }
 
 public class LiquidParticleLineRenderingSystem : SystemBase
-{ 
+{
     EntityQuery query;
 
     public LineRenderer[] renderers;
 
+    LiquidParticleLinerManager lines;
+
     protected override void OnCreate()
     {
         query = GetEntityQuery(typeof(LiquidParticle));
+
+        lines = Object.FindObjectOfType<LiquidParticleLinerManager>();
     }
 
     public struct Sortable : System.IComparable<Sortable>
     {
+        public float3 position;
         public Entity entity;
         public Entity prev;
         public int index;
@@ -230,10 +236,12 @@ public class LiquidParticleLineRenderingSystem : SystemBase
 
         var sortables = new NativeArray<Sortable>(entities.Length, Allocator.TempJob);
 
+
         for (int i = 0; i < sortables.Length; i++)
         {
             sortables[i] = new Sortable()
             {
+                position = components[i].position,
                 entity = entities[i],
                 prev = components[i].prev,
                 index = components[i].sortIndex
@@ -242,15 +250,28 @@ public class LiquidParticleLineRenderingSystem : SystemBase
 
         sortables.Sort();
 
+        List<Vector3> vertices = new List<Vector3>();
+        lines.Clear();
+
         for (int i = sortables.Length - 1; i >= 1; i--)
         {
+
+
             if (sortables[i].prev == sortables[i - 1].entity)
             {
-                Debug.Log("Connected");
+                vertices.Add(sortables[i].position);
+                //Debug.Log("Connected");
             }
             else
-                Debug.Log("DIS");
+            {
+                //lines.Get().SetPositions(vertices.ToArray());
+                lines.Form(vertices.ToArray());
+                vertices.Clear();
+                //Debug.Log("DIS");
+            }
         }
+
+        lines.Form(vertices.ToArray());
 
         entities.Dispose();
         components.Dispose();
