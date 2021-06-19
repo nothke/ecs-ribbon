@@ -207,6 +207,9 @@ public class LiquidParticleLineRenderingSystem : SystemBase
 
     LiquidParticleLinerManager lines;
 
+    const int MAX_POINTS_IN_BUFFER = 256;
+    Vector3[] points = new Vector3[MAX_POINTS_IN_BUFFER];
+
     protected override void OnCreate()
     {
         query = GetEntityQuery(typeof(LiquidParticle));
@@ -250,28 +253,30 @@ public class LiquidParticleLineRenderingSystem : SystemBase
 
         sortables.Sort();
 
-        List<Vector3> vertices = new List<Vector3>();
         lines.Clear();
+
+        int vi = 0;
 
         for (int i = sortables.Length - 1; i >= 1; i--)
         {
-
-
             if (sortables[i].prev == sortables[i - 1].entity)
             {
-                vertices.Add(sortables[i].position);
-                //Debug.Log("Connected");
+                points[vi++] = sortables[i].position;
             }
             else
             {
-                //lines.Get().SetPositions(vertices.ToArray());
-                lines.Form(vertices.ToArray());
-                vertices.Clear();
-                //Debug.Log("DIS");
+                lines.Form(points, vi);
+                vi = 0;
+            }
+
+            if (vi >= MAX_POINTS_IN_BUFFER)
+            {
+                lines.Form(points, vi);
+                vi = 0;
             }
         }
 
-        lines.Form(vertices.ToArray());
+        lines.Form(points, vi);
 
         entities.Dispose();
         components.Dispose();

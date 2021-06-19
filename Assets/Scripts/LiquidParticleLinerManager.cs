@@ -25,10 +25,10 @@ public class LiquidParticleLinerManager : MonoBehaviour
         inUse.Clear();
     }
 
-    public LineRenderer Form(Vector3[] points)
+    public LineRenderer Form(Vector3[] points, int count)
     {
         var line = Get();
-        line.positionCount = points.Length;
+        line.positionCount = count;
         line.SetPositions(points);
         return line;
     }
