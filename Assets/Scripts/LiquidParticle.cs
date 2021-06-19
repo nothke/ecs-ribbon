@@ -240,8 +240,6 @@ public class LiquidParticleLineRenderingSystem : SystemBase
 
     protected override void OnUpdate()
     {
-        //var cdfe = GetComponentDataFromEntity<LiquidParticle>(true);
-
         var entities = query.ToEntityArray(Allocator.TempJob);
         var components = query.ToComponentDataArray<LiquidParticle>(Allocator.TempJob);
 
@@ -271,7 +269,6 @@ public class LiquidParticleLineRenderingSystem : SystemBase
             .WithBurst()
             .Run();
         //.Schedule();
-
         //Dependency.Complete();
 
         lines.Clear();
@@ -330,5 +327,6 @@ public class LiquidParticleLineRenderingSystem : SystemBase
         entities.Dispose();
         components.Dispose();
         sortables.Dispose();
+        ranges.Dispose();
     }
 }

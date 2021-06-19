@@ -31,6 +31,14 @@ public class LiquidParticleLinerManager : MonoBehaviour
         Profiler.EndSample();
     }
 
+    public void ClearUnused()
+    {
+        foreach (var l in available)
+        {
+            l.enabled = false;
+        }
+    }
+
     public LineRenderer Form(NativeArray<Vector3> points, int count)
 
     {
@@ -49,6 +57,7 @@ public class LiquidParticleLinerManager : MonoBehaviour
             CreateNew() : available.Dequeue();
 
         inUse.Enqueue(l);
+        //l.enabled = true;
 
         return l;
     }
