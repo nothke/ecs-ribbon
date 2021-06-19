@@ -98,7 +98,7 @@ public class LiquidParticlesDebugLinksSystem : SystemBase
     }
 }
 
-public class LiquidParticlesPrepareRaycastBatchSystem : SystemBase
+public class LiquidParticlesRaycastBatchSystem : SystemBase
 {
     EndSimulationEntityCommandBufferSystem commandBufferSystem;
 
@@ -114,7 +114,6 @@ public class LiquidParticlesPrepareRaycastBatchSystem : SystemBase
 
     protected override void OnUpdate()
     {
-
         int ct = query.CalculateEntityCount();
 
         var entityList = new NativeArray<Entity>(ct, Allocator.TempJob);
@@ -140,27 +139,16 @@ public class LiquidParticlesPrepareRaycastBatchSystem : SystemBase
         Dependency = RaycastCommand.ScheduleBatch(
             commandsList, hitResults, 32, Dependency);
 
-        Dependency.Complete();
-        for (int i = 0; i < hitResults.Length; i++)
-        {
-            //Debug.Log(array[i]);
-
-            if (hitResults[i].collider != null)
-                Debug.Log(hitResults[i].collider);
-        }
+        commandsList.Dispose(Dependency);
 
         // Kill PASS
 
         var ecb = commandBufferSystem.CreateCommandBuffer().AsParallelWriter();
 
         Dependency = Job
-            //.WithReadOnly(array)
-            .WithReadOnly(commandsList)
             .WithReadOnly(hitResults)
             .WithCode(() =>
             {
-                var _ = commandsList.Length; // Required for capture
-
                 for (int i = 0; i < ct; i++)
                 {
                     if (RaycastUtil.GetColliderID(hitResults[i]) != 0)
@@ -168,8 +156,6 @@ public class LiquidParticlesPrepareRaycastBatchSystem : SystemBase
                 }
             })
             .WithDisposeOnCompletion(entityList)
-            .WithDisposeOnCompletion(commandsList)
-            //.WithDisposeOnCompletion(array)
             .WithDisposeOnCompletion(hitResults)
             .WithBurst()
             .Schedule(Dependency);
@@ -179,7 +165,7 @@ public class LiquidParticlesPrepareRaycastBatchSystem : SystemBase
 }
 
 [DisableAutoCreation]
-public class LiquidParticleRaycastIntoWorldSystem : SystemBase
+public class LiquidParticlesRaycastSystem : SystemBase
 {
     EndSimulationEntityCommandBufferSystem commandBufferSystem;
 
