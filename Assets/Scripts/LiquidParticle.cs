@@ -209,7 +209,7 @@ public class LiquidParticleLineRenderingSystem : SystemBase
 
     LiquidParticleLinerManager lines;
 
-    const int MAX_POINTS_IN_BUFFER = 256;
+    const int MAX_POINTS_IN_BUFFER = 512;
     NativeArray<Vector3> points;
 
     protected override void OnCreate()
@@ -278,52 +278,46 @@ public class LiquidParticleLineRenderingSystem : SystemBase
 
 
         {
-            int len = 0;
+            int cur = 0;
             int start = 0;
 
             for (int i = sortables.Length - 1; i >= 1; i--)
             {
-                if (sortables[i].prev == sortables[i - 1].entity)
+                if (sortables[i].prev == sortables[i - 1].entity
+                    && cur < MAX_POINTS_IN_BUFFER)
                 {
-                    points[len++] = sortables[i].position;
+                    points[cur++] = sortables[i].position;
                 }
                 else
                 {
-                    //lines.Form(points, len);
+                    int len = cur - start;
+                    if (len > 1)
+                    {
+                        ranges.Add(start);
+                        ranges.Add(len);
+                    }
 
-                    ranges.Add(start);
-                    ranges.Add(len);
-                    start += len;
-                    len = 0;
-                }
-
-                if (len >= MAX_POINTS_IN_BUFFER)
-                {
-                    //lines.Form(points, len);
-
-                    ranges.Add(start);
-                    ranges.Add(len);
-                    start += len;
-                    len = 0;
+                    start = cur;
                 }
             }
 
-            ranges.Add(start);
-            ranges.Add(len);
-            //start += len;
-            //len = 0;
-            //lines.Form(points, len);
+            if (cur - start > 1)
+            {
+                ranges.Add(start);
+                ranges.Add(cur - start);
+            }
         }
+
+        Profiler.EndSample();
 
         for (int i = 0; i < ranges.Length; i += 2)
         {
-            Debug.Log($"{ranges[i]}:{ranges[i + 1]}");
+            //Debug.Log($"{ranges[i]}:{ranges[i + 1]}");
 
             var slice = points.GetSubArray(ranges[i], ranges[i + 1]);
             lines.Form(slice, ranges[i + 1]);
         }
 
-        Profiler.EndSample();
 
         entities.Dispose();
         components.Dispose();
